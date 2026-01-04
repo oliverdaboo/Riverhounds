@@ -95,6 +95,7 @@ goals_added_pizza<- function(team){
         Statistic %in% c("Interrupting", "Fouling", "Claiming") ~ "Defending/GK",
         TRUE ~ "Shooting"
       ),
+      type = factor(type, levels = c("In Possession", "Shooting", "Defending/GK")),
       index = row_number()
     )
   # Create the plot
@@ -104,7 +105,7 @@ goals_added_pizza<- function(team){
     coord_curvedpolar() +  
     geom_label(aes(label = Percentile), color = "gray20", fill = "oldlace", 
                size = 2.5, fontface = "bold", show.legend = FALSE) +
-    scale_fill_manual(values = c("#034694", "red", "gold")) +
+    scale_fill_manual(values = c("gold","#034694","red")) +
     scale_y_continuous(limits = c(-15, 110)) + 
     labs(
       title = paste(team, "Goals Added Profile"),
@@ -146,13 +147,13 @@ passing_pizza <- function(team) {
            attempted_passes_for, 
            pass_completion_percentage_for, 
            xpass_completion_percentage_for, 
-           avg_vertical_distance_for, 
            passes_completed_over_expected_p100_for, 
-           goals_added_for_Passing) |>
+           goals_added_for_Passing,
+           avg_vertical_distance_for) |>
     rename(
       `Pass Volume` = attempted_passes_for,
-      `Pass %` = pass_completion_percentage_for,
-      `Expected Pass %` = xpass_completion_percentage_for,
+      `Pass Completion %` = pass_completion_percentage_for,
+      `Expected Pass Completion %` = xpass_completion_percentage_for,
       `Pass Score (p100)` = passes_completed_over_expected_p100_for,
       `Verticality` = avg_vertical_distance_for,
       `g+ Passing` = goals_added_for_Passing
@@ -169,12 +170,12 @@ passing_pizza <- function(team) {
     mutate(
       Statistic = str_remove(Statistic, "perc_"),
       type = case_when(
-        Statistic %in% c("Pass Volume", "Pass %", "Expected Pass %") ~ "Volume/Accuracy",
+        Statistic %in% c("Pass Volume", "Pass Completion %", "Expected Pass Completion %") ~ "Volume/Accuracy",
         Statistic %in% c("Pass Score (p100)", "g+ Passing") ~ "Efficiency",
         Statistic == "Verticality" ~ "Style",
         TRUE ~ "Other"
       ),
-      # ADDED: Create the index for reordering the plot slices
+      type = factor(type, levels = c("Volume/Accuracy", "Efficiency", "Style")),
       index = row_number()
     )
   
@@ -185,7 +186,7 @@ passing_pizza <- function(team) {
     coord_curvedpolar() +  
     geom_label(aes(label = Percentile), color = "gray20", fill = "oldlace", 
                size = 2.5, fontface = "bold", show.legend = FALSE) +
-    scale_fill_manual(values = c("#034694", "red", "gold")) +
+    scale_fill_manual(values = c("#228B22", "orange", "purple")) +
     scale_y_continuous(limits = c(-15, 110)) + 
     labs(
       title = paste(team, "Passing Profile"),
@@ -221,28 +222,52 @@ passing_pizza("Pittsburgh Riverhounds SC")
 overall_pizza <- function(team) {
   # 1. Clean data AND assign it back to 'data'
   data <- uslc_team_analysis |>
-    mutate(goals_for_minus_xgoals_for = goals_for - xgoals_for,
-           goals_against_minus_xgoals_against = goals_against - xgoals_against,
-           shots_for_goal_conversion = goals_for/shots_for,
+    mutate(shots_for_goal_conversion = goals_for/shots_for,
            shots_against_goal_conversion = goals_against/shots_against,
+           passes_per_shot_for = attempted_passes_for / shots_for,
+           passes_per_shot_against = attempted_passes_against / shots_against,
            points_minus_xpoints = points - xpoints,
            total_goals_added_for_minus_total_goals_added_against = total_goals_added_for - total_goals_added_against)|>
     select(team_name, 
-           goals_for_minus_xgoals_for, 
+           xgoals_for, 
            shots_for_goal_conversion,
-           goals_against_minus_xgoals_against, 
+           passes_per_shot_for,
+           xgoals_against, 
            shots_against_goal_conversion,
+           passes_per_shot_against,
            points_minus_xpoints,
            total_goals_added_for_minus_total_goals_added_against) |>
     rename(
-      `Shooting Performance (G - xG)` = goals_for_minus_xgoals_for,
-      `Defensive Performance (GA - xGA)` = goals_against_minus_xgoals_against,
+      `Chance Creation (xG)` = xgoals_for,
+      `Chance Creation Against (xGA)` = xgoals_against,
       `Shot to Goal %` = shots_for_goal_conversion,
       `Shot Against to Goal %` = shots_against_goal_conversion,
+      'Passes per Shot' = passes_per_shot_for,
+      'Passes per Shot Against' = passes_per_shot_against,
       `Under/Over Performance (P - xP)` = points_minus_xpoints,
       `G+ Performance (G+ - GA+)` = total_goals_added_for_minus_total_goals_added_against
     ) |>
-    mutate(across(-team_name, ~round(percent_rank(.) * 100, 0), .names = "perc_{.col}"))
+    mutate(
+      # Standard "Higher is Better" (Offensive)
+      across(
+        c(`Chance Creation (xG)`, `Shot to Goal %`, `Passes per Shot`, `Passes per Shot Against`,
+          `Under/Over Performance (P - xP)`, `G+ Performance (G+ - GA+)`), 
+        ~round(percent_rank(.) * 100, 0), 
+        .names = "perc_{.col}"
+      ),
+      # "Lower is Better" (Defensive - We use 1 minus the rank)
+      across(
+        c(`Chance Creation Against (xGA)`, `Shot Against to Goal %`), 
+        ~round((1 - percent_rank(.)) * 100, 0), 
+        .names = "perc_{.col}"
+      )
+    )
+  # Explicitly Define the Order of Stats
+  stat_order <- c(
+    "Under/Over Performance (P - xP)", "G+ Performance (G+ - GA+)",  # Overall
+    "Chance Creation (xG)", "Shot to Goal %", "Passes per Shot",  # Offensive
+    "Chance Creation Against (xGA)", "Shot Against to Goal %", "Passes per Shot Against" # Defensive
+  )
   
   # 2. Filter for specific team and pivot
   team_df <- data |>
@@ -253,26 +278,29 @@ overall_pizza <- function(team) {
                  values_to = "Percentile") |>
     mutate(
       Statistic = str_remove(Statistic, "perc_"),
+      # Convert to factor using our predefined order
+      Statistic = factor(Statistic, levels = stat_order),
       type = case_when(
-        Statistic %in% c("Shooting Performance (G - xG)", "Shot to Goal %") ~ "Offensive Efficiency",
-        Statistic %in% c("Defensive Performance (GA - xGA)", "Shot Against to Goal %") ~ "Defensive Efficiency",
-        TRUE ~ "Overall Performance"
+        Statistic %in% stat_order[1:2] ~ "Overall Performance",
+        Statistic %in% stat_order[3:5] ~ "Offensive Style",
+        Statistic %in% stat_order[6:8] ~ "Defensive Style"
       ),
-      # ADDED: Create the index for reordering the plot slices
-      index = row_number()
-    )
+      # Set 'type' as a factor to fix color mapping order
+      type = factor(type, levels = c("Overall Performance", "Offensive Style", "Defensive Style"))
+    ) |>
+    arrange(Statistic)
   
   # 3. Create the plot
-  p <- ggplot(data = team_df, aes(x = reorder(Statistic, index), y = Percentile, fill = type)) +
+  p <- ggplot(data = team_df, aes(x = Statistic, y = Percentile, fill = type)) +
     geom_bar(aes(y = 100), stat = "identity", width = 1, alpha = 0.1, fill = "gray20", color = "oldlace") +
     geom_bar(stat = "identity", width = 1, color = "oldlace") +
     coord_curvedpolar() +  
     geom_label(aes(label = Percentile), color = "gray20", fill = "oldlace", 
                size = 2.5, fontface = "bold", show.legend = FALSE) +
-    scale_fill_manual(values = c("#034694", "red", "gold")) +
+    scale_fill_manual(values = c("gold", "#034694", "red")) + # Fixed order: Overall, Off, Def 
     scale_y_continuous(limits = c(-15, 110)) + 
     labs(
-      title = paste(team, "Passing Profile"),
+      title = paste(team, "Overall Profile"),
       subtitle = "2025 USLC Regular Season | Percentile Rank vs League",
       caption = "Data: American Soccer Analysis",
       x = NULL, y = NULL
