@@ -31,8 +31,11 @@ uslc_team_xg <- uslc_team_xg|>
   left_join(uslc_team_xpass|>
               select(-count_games, -competition), by='team_id')
 
-# getting 2025 uslc team g+ during the regular season
-uslc_team_goals_added <- asa$get_team_goals_added(leagues='uslc', season_name=2025, stage_name='Regular Season')
+# getting 2025 uslc team g+ during the regular season and non-extreme game states
+uslc_team_goals_added <- asa$get_team_goals_added(leagues='uslc', 
+                                                  season_name=2025, 
+                                                  stage_name='Regular Season',
+                                                  gamestate_trunc = c(-1, 0, 1))
 
 # --- extracting full team level g+ from the individual team data frames inside the goals_added datset ---
 
@@ -69,7 +72,7 @@ uslc_team_analysis <- uslc_team_xg|>
               select(-data, -competition), by='team_id')
 
 # --- Constructing a pizza plot with the goals added and action type
-  
+
 goals_added_pizza<- function(team){
   # cleaning the data in order to make the pizza plot
   data <- uslc_team_analysis|>
@@ -109,7 +112,7 @@ goals_added_pizza<- function(team){
     scale_y_continuous(limits = c(-15, 110)) + 
     labs(
       title = paste(team, "Goals Added Profile"),
-      subtitle = "2025 USLC Regular Season | Percentile Rank vs League",
+      subtitle = "2025 USLC Regular Season (Non-Extreme Game States) | Percentile Rank vs League",
       caption = "Data: American Soccer Analysis",
       x = NULL, y = NULL
     ) +
@@ -126,9 +129,9 @@ goals_added_pizza<- function(team){
       plot.subtitle = element_text(hjust = 0.5, size = 9)
     )
   
-  # Create a clean filename (e.g., "Pittsburgh_Riverhounds_SC_g+_pizza.png")
+  # Create a clean filename 
   clean_name <- gsub(" ", "_", team)
-  file_path <- paste0("pizza_plots/", clean_name, "_g+_pizza.png")
+  file_path <- paste0("pizza_plots/", clean_name, "_g+_pizza_nonextr.png")
   
   # Save the plot
   ggsave(file_path, plot = p, height = 7, width = 7, dpi = 300)
@@ -190,7 +193,7 @@ passing_pizza <- function(team) {
     scale_y_continuous(limits = c(-15, 110)) + 
     labs(
       title = paste(team, "Passing Profile"),
-      subtitle = "2025 USLC Regular Season | Percentile Rank vs League",
+      subtitle = "2025 USLC Regular Season (Non-Extreme Game States) | Percentile Rank vs League",
       caption = "Data: American Soccer Analysis",
       x = NULL, y = NULL
     ) +
@@ -210,7 +213,7 @@ passing_pizza <- function(team) {
   # 4. Save Logic
   if (!dir.exists("pizza_plots")) dir.create("pizza_plots")
   clean_name <- gsub(" ", "_", team)
-  file_path <- paste0("pizza_plots/", clean_name, "_passing_pizza.png")
+  file_path <- paste0("pizza_plots/", clean_name, "_passing_pizza_nonextr.png")
   
   ggsave(file_path, plot = p, height = 7, width = 7, dpi = 300)
   message(paste("Saved plot for:", team))
@@ -301,7 +304,7 @@ overall_pizza <- function(team) {
     scale_y_continuous(limits = c(-15, 110)) + 
     labs(
       title = paste(team, "Overall Profile"),
-      subtitle = "2025 USLC Regular Season | Percentile Rank vs League",
+      subtitle = "2025 USLC Regular Season (Non-Extreme Game States) | Percentile Rank vs League",
       caption = "Data: American Soccer Analysis",
       x = NULL, y = NULL
     ) +
@@ -321,13 +324,10 @@ overall_pizza <- function(team) {
   # 4. Save Logic
   if (!dir.exists("pizza_plots")) dir.create("pizza_plots")
   clean_name <- gsub(" ", "_", team)
-  file_path <- paste0("pizza_plots/", clean_name, "_overall_pizza.png")
+  file_path <- paste0("pizza_plots/", clean_name, "_overall_pizza_nonextr.png")
   
   ggsave(file_path, plot = p, height = 7, width = 7, dpi = 300)
   message(paste("Saved plot for:", team))
 }
 
 overall_pizza("Pittsburgh Riverhounds SC")
-
-
-# Further analysis on play before/after Rob Vincent
