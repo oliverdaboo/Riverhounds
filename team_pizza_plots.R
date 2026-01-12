@@ -330,4 +330,3 @@ overall_pizza <- function(team) {
 overall_pizza("Pittsburgh Riverhounds SC")
 
 
-# Further analysis on play before/after Rob Vincent
